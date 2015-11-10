@@ -117,55 +117,94 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 		DataSource dataSource = setupDataSource();
 		
 		List<HashMap<String, Object>> listDIsAndTable = new ArrayList<HashMap<String,Object>>();
-		List<HashMap<String, Object>> listDIsStatuses = null;
+		List<HashMap<String, Object>> listIOsStatuses = new ArrayList<HashMap<String,Object>>();
+		List<HashMap<String, Object>> listDOsAndTable = new ArrayList<HashMap<String,Object>>();
+		List<HashMap<String, Object>> listDOsStatuses = null;
 		int events = 0;
 		int statuses = 0;
 		try {
 			
+			// DI
 			logger.info( String.format("***Try to get DIs***"));
-			
-			listDIsAndTable = getDIsAndTable(dataSource);
-			
+			listDIsAndTable = getIOsAndTable(dataSource, "DI");
 			logger.info( String.format("***Received %d DIs from SQL***", listDIsAndTable.size()));
-			String dititle, ditable;
 			
-			logger.info( String.format("***Try to get DIs statuses***"));
+			// DO
+			logger.info( String.format("***Try to get DOs***"));
+			listDOsAndTable = getIOsAndTable(dataSource, "DO");
+			logger.info( String.format("***Received %d DOs from SQL***", listDIsAndTable.size()));
+			
+			List<HashMap<String, Object>> listIOsAndTable = new ArrayList<HashMap<String,Object>>();
+			listIOsAndTable.addAll(listDIsAndTable);
+			listIOsAndTable.addAll(listDOsAndTable);
+			
+			logger.info( String.format("***Received %d total IOs from SQL***", listIOsAndTable.size()));
+			
+			String iotitle, iotable;
+			
+			int ioid;
 			for(int i=0; i < listDIsAndTable.size(); i++) {
+				
+				logger.info( String.format("***Try to get DIs statuses***"));
 			  	
-				dititle = listDIsAndTable.get(i).get("title").toString();
-				ditable  = listDIsAndTable.get(i).get("tablename").toString();
-				logger.debug("MYSQL row " + i + ": " + dititle + 
-						" " + ditable);
+				iotitle = listDIsAndTable.get(i).get("title").toString();
+				iotable  = listDIsAndTable.get(i).get("tablename").toString();
+				ioid  = Integer.parseInt(listDIsAndTable.get(i).get("ioid").toString());
 				
-				listDIsStatuses = getDIsStatuses(dititle, ditable, dataSource);
+				logger.debug("MYSQL row " + i + ": " + iotitle + 
+						" " + iotable);
 				
-				if ( listDIsStatuses != null ){
-					HashMap<String, Object> DI = listDIsStatuses.get(0);
+				listIOsStatuses.addAll(getIOsStatuses(iotitle, iotable, "DI", ioid, dataSource));
+			}
+			
+			for(int i=0; i < listDOsAndTable.size(); i++) {
+				
+				logger.info( String.format("***Try to get DOs statuses***"));
+			  	
+				iotitle = listDOsAndTable.get(i).get("title").toString();
+				iotable  = listDOsAndTable.get(i).get("tablename").toString();
+				ioid  = Integer.parseInt(listDOsAndTable.get(i).get("ioid").toString());
+				logger.debug("MYSQL row " + i + ": " + iotitle + 
+						" " + iotable);
+				
+				listIOsStatuses.addAll(getIOsStatuses(iotitle, iotable, "DO", ioid, dataSource));
+			}
+			
+			String iotype;
+			//if ( listIOsStatuses == null )
+			//		return 0;
+			if ( listIOsStatuses != null ){
+				for(int i=0; i < listIOsStatuses.size(); i++) {
+				
+					HashMap<String, Object> io = listIOsStatuses.get(i);
+					iotype = listIOsStatuses.get(i).get("iotype").toString();
+					iotitle = listIOsStatuses.get(i).get("iotitle").toString();
 					
-					List<Event> dievents = genEvents(dititle, DI);
+					List<Event> ioevents = genEvents(iotitle, io);
 					
-					for(int i1=0; i1 < dievents.size(); i1++) {
+					for(int i1=0; i1 < ioevents.size(); i1++) {
 						
 						statuses++;
 						
 						logger.debug("*** Create Exchange ***" );
 						
-						String key = dievents.get(i1).getHost() + "_" +
-								dievents.get(i1).getObject() + "_" + dievents.get(i1).getParametrValue();
-						String key1 = dievents.get(i1).getHost() + "_" +
-								dievents.get(i1).getObject();
+						String key = ioevents.get(i1).getHost() + "_" + iotype + "_" +
+								ioevents.get(i1).getObject() + "_" + ioevents.get(i1).getParametrValue();
+						String key1 = ioevents.get(i1).getHost() + "_" + iotype + "_" +
+								ioevents.get(i1).getObject();
 						
 						Exchange exchange = getEndpoint().createExchange();
-						exchange.getIn().setBody(dievents.get(i1), Event.class);
+						exchange.getIn().setBody(ioevents.get(i1), Event.class);
 						exchange.getIn().setHeader("EventUniqId", key);
 						
 						exchange.getIn().setHeader("EventUniqIdWithoutStatus", key1);
 						
-						exchange.getIn().setHeader("EventStatus", dievents.get(i1).getParametrValue());
+						exchange.getIn().setHeader("EventStatus", ioevents.get(i1).getParametrValue());
 						
-						exchange.getIn().setHeader("Object", dievents.get(i1).getObject());
-						exchange.getIn().setHeader("Timestamp", dievents.get(i1).getTimestamp());
+						exchange.getIn().setHeader("Object", ioevents.get(i1).getObject());
+						exchange.getIn().setHeader("Timestamp", ioevents.get(i1).getTimestamp());
 						
+						//add to cache
 						exchange.getIn().setHeader(CacheConstants.CACHE_OPERATION, CacheConstants.CACHE_OPERATION_CHECK);
 						exchange.getIn().setHeader(CacheConstants.CACHE_KEY, key);
 						
@@ -175,7 +214,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 						logger.debug(String.format("*** CACHE HEADERS: %s %s  ***", CacheConstants.CACHE_OPERATION, CacheConstants.CACHE_OPERATION_CHECK ));
 						logger.debug(String.format("*** CACHE HEADERS: %s %s  ***", CacheConstants.CACHE_KEY, key ));
 						
-						exchange.getIn().setHeader("TEST", key);
+						//exchange.getIn().setHeader("TEST", key);
 						//exchange.getIn().setHeader("DeviceType", vmevents.get(i).getDeviceType());
 						
 						
@@ -189,98 +228,48 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 							
 						} catch (Exception e) {
 							// TODO Auto-generated catch block
-							e.printStackTrace();
+							//e.printStackTrace();
 							logger.error( String.format("Error while process Exchange message: %s ", e));
 						} 
 						
-						/*
-						logger.debug("*** Create Exchange for DELETE ***" );
-						
-						
-						context = getContext();
-						
-						Endpoint endpoint = context.getEndpoint("cache://ServerCacheTest");
-						logger.debug("*** endpoint ***" + endpoint );
-						Exchange exchange1 = endpoint.createExchange();
-						logger.debug("*** exchange1 ***" + exchange1 );
-					    //exchange.getIn().setBody(vmevents.get(i1), Event.class);
-					    exchange1.getIn().setHeader(CacheConstants.CACHE_OPERATION, CacheConstants.CACHE_OPERATION_DELETE);
-					    exchange1.getIn().setHeader(CacheConstants.CACHE_KEY, key1+"_OK");
-					    //exchange1.getIn().setHeader("EventId", event.getExternalid());
-
-					    
-					    Producer producer2 = null;
-						try {
-							producer2 = endpoint.createProducer();
-						} catch (Exception e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						
-					    try {
-					    	producer2.process(exchange1);
-						} catch (Exception e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						*/
-					
+											
 					}
 				}
-				//genevent = geEventObj( device, "fcFabric" );
-				
-				/*
-				logger.info("Create Exchange container");
-				Exchange exchange = getEndpoint().createExchange();
-				exchange.getIn().setBody(listFinal.get(i), Device.class);
-				exchange.getIn().setHeader("DeviceId", listFinal.get(i).getId());
-				exchange.getIn().setHeader("DeviceType", listFinal.get(i).getDeviceType());
-				
-				
-
-				try {
-					getProcessor().process(exchange);
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				} 
-				*/
-	  	
 			}
-			
 						
-			logger.info( String.format("***Received %d VMs statuses from SQL*** ", statuses));
-	  
+			logger.info( String.format("***Received %d IOs statuses from SQL*** ", statuses));
 			
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-			logger.error( String.format("Error while get VM SQL: %s ", e));
+			logger.error( String.format("Error while get IOs SQL: %s ", e));
 		}
 		
 		logger.info( String.format("***Sended to Exchange messages: %d ***", events));
 		
-		removeLineFromFile("sendedEvents.dat", "Tgc1-1Cp1_ping_OK");
+		//removeLineFromFile("sendedEvents.dat", "Tgc1-1Cp1_ping_OK");
 	
         return 1;
 	}
 	
-	private static List<Event> genEvents( String dititle, HashMap<String, Object> DIStatuses ) {
+	private static List<Event> genEvents( String dititle, HashMap<String, Object> IOsStatuses ) {
 		
-		String datetime = DIStatuses.get("datetime").toString();
-		String status_colour = DIStatuses.get("di_status_colour").toString();
-		String status_value = DIStatuses.get("di_status_value").toString();
+		String datetime = IOsStatuses.get("datetime").toString();
+		String status_colour = IOsStatuses.get("di_status_colour").toString();
+		String status_value = IOsStatuses.get("di_status_value").toString();
+		String iotype = IOsStatuses.get("iotype").toString();
 				//String ping_colour1 = listVmStatuses.get(0).get("ping_colour").toString();
 		//vmuuid  = listVmStatuses.get(0).get("uuid").toString();
-		logger.debug(dititle + ": " + datetime );
-		logger.debug(dititle + ": " + status_colour);
-		logger.debug(dititle + ": " + status_value);
+		logger.debug(datetime + ": " + datetime );
+		logger.debug(status_colour + ": " + status_colour);
+		logger.debug(status_value + ": " + status_value);
+		logger.debug(iotype + ": " + iotype);
 
 		Event event;
 		List<Event> eventList = new ArrayList<Event>();
 		// Create Event object for further use
 		event = genDeviceObj(dititle, "status", 
-				status_colour, status_value, DIStatuses.get("datetime").toString());
+				status_colour, status_value, IOsStatuses.get("datetime").toString());
 		eventList.add(event);
 		/*
 		 event = genDeviceObj(vmtitle, "ping", 
@@ -353,11 +342,11 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 	private static String setRightMessage(String dititle, String object, String status) {
 		// TODO Auto-generated method stub
 		
-		String newmessage = String.format("DI: %s. Статус контакта: %s %s", dititle, object, status);
+		String newmessage = String.format("IO: %s. Статус контакта: %s %s", dititle, object, status);
 		return newmessage;
 	}
 
-	private List<HashMap<String, Object>> getDIsStatuses(String dititle, String ditable, DataSource dataSource) throws SQLException {
+	private List<HashMap<String, Object>> getIOsStatuses(String iotitle, String iotable, String iotype, int ioid, DataSource dataSource) throws SQLException {
 		// TODO Auto-generated method stub
 		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
 		
@@ -371,12 +360,20 @@ public class OPSMConsumer extends ScheduledPollConsumer {
         	//String table_prefix =  endpoint.getConfiguration().getTable_prefix();
         	
         	//String vmtable = ditable;
-
+        	
+        	String io_status_col;
+        	
+        	if ( iotype == "DI" )
+        		io_status_col = di_status_col;
+        	else 
+        		io_status_col = do_status_col;
         	
             pstmt = con.prepareStatement(String.format("SELECT datetime, "
-            			+ " %s_colour as di_status_colour, %s_value as di_status_value "
-            			+ "FROM `%s`" , di_status_col, di_status_col, ditable ));
-            //pstmt.setString(1, vm_vmtools_col);
+            			+ " %s_colour as di_status_colour, %s_value as di_status_value, '%s' as iotype,  '%s' as iotitle"
+            			+ " FROM `%s`"
+            			+ " WHERE id = ?"
+            			, io_status_col, io_status_col, iotype, iotitle, iotable ));
+            pstmt.setInt(1, ioid);
             
             logger.debug("MYSQL query: " +  pstmt.toString()); 
             resultset = pstmt.executeQuery();
@@ -408,7 +405,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 		
 	}
 
-	private List<HashMap<String, Object>> getDIsAndTable(DataSource dataSource) throws SQLException {
+	private List<HashMap<String, Object>> getIOsAndTable(DataSource dataSource, String iotype) throws SQLException {
 		// TODO Auto-generated method stub
         
 		List<HashMap<String,Object>> list = new ArrayList<HashMap<String,Object>>();
@@ -419,11 +416,14 @@ public class OPSMConsumer extends ScheduledPollConsumer {
         try {
         	con = (Connection) dataSource.getConnection();
 			//con.setAutoCommit(false);
+        	
+        	String table = "tree_" + iotype; 
+        	String sql = String.format("SELECT title, type, tablename, numb as ioid " +
+                    "FROM %s " +
+                    "WHERE `show` = ?"
+                    + " AND tablename <> ?", table);
 			
-            pstmt = con.prepareStatement("SELECT tree_DI.title, tree_DI.type, tree_DI.tablename " +
-                        "FROM tree_DI " +
-                        "WHERE tree_DI.show = ?"
-                        + " AND tree_DI.tablename <> ?");
+            pstmt = con.prepareStatement(sql);
                        // +" LIMIT ?;");
             pstmt.setInt(1, 1);
             pstmt.setString(2, "");
