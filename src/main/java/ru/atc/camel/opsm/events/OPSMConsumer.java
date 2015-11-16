@@ -132,7 +132,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 			// DO
 			logger.info( String.format("***Try to get DOs***"));
 			listDOsAndTable = getIOsAndTable(dataSource, "DO");
-			logger.info( String.format("***Received %d DOs from SQL***", listDIsAndTable.size()));
+			logger.info( String.format("***Received %d DOs from SQL***", listDOsAndTable.size()));
 			
 			List<HashMap<String, Object>> listIOsAndTable = new ArrayList<HashMap<String,Object>>();
 			listIOsAndTable.addAll(listDIsAndTable);
