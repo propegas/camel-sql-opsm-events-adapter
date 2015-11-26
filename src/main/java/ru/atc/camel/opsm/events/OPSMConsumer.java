@@ -326,6 +326,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 		event.setMessage(setRightMessage(vmtitle, object, status));
 		event.setCategory("HARDWARE");
 		event.setStatus("OPEN");
+		event.setEventsource("OPSM");
 		event.setService("OPSM");
 		
 
