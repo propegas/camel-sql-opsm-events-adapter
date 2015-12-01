@@ -166,12 +166,9 @@ public class Main {
 				*/
 				
 				OPSMConsumer.setContext(context);
-				
-				
-				
+
 				File cachefile = new File("sendedEvents.dat");
 		        cachefile.createNewFile();
-		        
 		        
 		        from("cache:OPSM")
 				          
@@ -245,7 +242,13 @@ public class Main {
 			             FileIdempotentRepository.fileIdempotentRepository(cachefile,2500)
 			             )
 			*/	
+				.choice()
+				.when(header("Type").isEqualTo("Heartbeat"))
+					.marshal(myJson)
+					.to("activemq:{{eventsqueue}}")
+					.log("Error: ${id} ${header.EventUniqId}")
 					
+				.otherwise()
 					.to("cache:OPSM")
 					.choice()
 						.when(header(CacheConstants.CACHE_ELEMENT_WAS_FOUND).isNull())
@@ -258,7 +261,7 @@ public class Main {
 								Message in = exchange.getIn();
 								String key = in.getHeader("EventUniqId").toString();
 								String key1 = in.getHeader("EventUniqIdWithoutStatus").toString();
-								in.setHeader("TEST", key1);
+								//in.setHeader("TEST", key1);
 								in.setHeader(CacheConstants.CACHE_OPERATION, CacheConstants.CACHE_OPERATION_ADD);
 								in.setHeader(CacheConstants.CACHE_KEY, key);
 								in.setHeader("CacheUniqIdWithoutStatus", key1);
@@ -273,7 +276,7 @@ public class Main {
 							.to("direct:ShowData")
 							.to("cache:OPSM") 
 							.marshal(myJson)
-							.to("activemq:OPSM-tgk1-Events.queue")
+							.to("activemq:{{eventsqueue}}")
 							.log("New event1: ${id} ${header.EventUniqId}")
 						.otherwise()
 						.process(new Processor() {
@@ -321,6 +324,17 @@ public class Main {
 							//.log("Old event2: ${id} ${header.EventUniqId}");
 					.end();
 				
+				// Heartbeats
+				from("timer://foo?period={{heartbeatsdelay}}")
+		        .process(new Processor() {
+					public void process(Exchange exchange) throws Exception {
+						OPSMConsumer.genHeartbeatMessage(exchange);
+					}
+				})
+				//.bean(WsdlNNMConsumer.class, "genHeartbeatMessage", exchange)
+		        .marshal(myJson)
+		        .to("activemq:{{eventsqueue}}")
+				.log("*** Heartbeat: ${id}");
 								
 				from("direct:ShowData").process(new Processor() {
 					public void process(Exchange exchange) throws Exception {
@@ -349,7 +363,7 @@ public class Main {
 						logger.debug("------ End  ------");
 					}
 				});
-				}
+			}
 		});
 		
 		

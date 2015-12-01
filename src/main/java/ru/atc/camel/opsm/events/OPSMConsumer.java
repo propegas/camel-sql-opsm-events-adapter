@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -56,6 +57,7 @@ import java.text.SimpleDateFormat;
 
 //import com.mysql.jdbc.Connection;
 import com.mysql.jdbc.Driver;
+import com.mysql.jdbc.SQLError;
 
 
 
@@ -86,6 +88,8 @@ public class OPSMConsumer extends ScheduledPollConsumer {
         super(endpoint, processor);
         this.endpoint = endpoint;
         //this.afterPoll();
+        this.setTimeUnit(TimeUnit.MINUTES);
+        this.setInitialDelay(0);
         this.setDelay(endpoint.getConfiguration().getDelay());
 	}
 	
@@ -110,8 +114,83 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 		throw new IllegalArgumentException("Incorrect operation: " + operationPath);
 	}
 	
+	@Override
+	public long beforePoll(long timeout) throws Exception {
+		
+		logger.info("*** Before Poll!!!");
+		// only one operation implemented for now !
+		//throw new IllegalArgumentException("Incorrect operation: ");
+		
+		//send HEARTBEAT
+		genHeartbeatMessage(getEndpoint().createExchange());
+		
+		return timeout;
+	}
+	
+	private void genErrorMessage(String message) {
+		// TODO Auto-generated method stub
+		long timestamp = System.currentTimeMillis();
+		timestamp = timestamp / 1000;
+		String textError = "Возникла ошибка при работе адаптера: ";
+		Event genevent = new Event();
+		genevent.setMessage(textError + message);
+		genevent.setEventCategory("ADAPTER");
+		genevent.setSeverity(PersistentEventSeverity.CRITICAL.name());
+		genevent.setTimestamp(timestamp);
+		genevent.setEventsource("OPSM_EVENTS_ADAPTER");
+		
+		logger.info(" **** Create Exchange for Error Message container");
+        Exchange exchange = getEndpoint().createExchange();
+        exchange.getIn().setBody(genevent, Event.class);
+        
+        exchange.getIn().setHeader("EventIdAndStatus", "Error_" +timestamp);
+        exchange.getIn().setHeader("Timestamp", timestamp);
+        exchange.getIn().setHeader("queueName", "Events");
+        exchange.getIn().setHeader("Type", "Heartbeat");
+
+        try {
+			getProcessor().process(exchange);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
+		
+	}
+
+	
+	public static void genHeartbeatMessage(Exchange exchange) {
+		// TODO Auto-generated method stub
+		long timestamp = System.currentTimeMillis();
+		timestamp = timestamp / 1000;
+		//String textError = "Возникла ошибка при работе адаптера: ";
+		Event genevent = new Event();
+		genevent.setMessage("Сигнал HEARTBEAT от адаптера");
+		genevent.setEventCategory("ADAPTER");
+		genevent.setObject("HEARTBEAT");
+		genevent.setSeverity(PersistentEventSeverity.OK.name());
+		genevent.setTimestamp(timestamp);
+		genevent.setEventsource("OPSM_EVENT_ADAPTER");
+		
+		logger.info(" **** Create Exchange for Heartbeat Message container");
+        //Exchange exchange = getEndpoint().createExchange();
+        exchange.getIn().setBody(genevent, Event.class);
+        
+        exchange.getIn().setHeader("Timestamp", timestamp);
+        exchange.getIn().setHeader("queueName", "Events");
+
+        try {
+        	//Processor processor = getProcessor();
+        	//.process(exchange);
+        	//processor.process(exchange);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			//e.printStackTrace();
+		} 
+	}
+	
+	
 	// "throws Exception" 
-	private int processSearchEvents() {
+	private int processSearchEvents()  throws Exception, Error, SQLException {
 		
 		//Long timestamp;
 		DataSource dataSource = setupDataSource();
@@ -119,7 +198,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 		List<HashMap<String, Object>> listDIsAndTable = new ArrayList<HashMap<String,Object>>();
 		List<HashMap<String, Object>> listIOsStatuses = new ArrayList<HashMap<String,Object>>();
 		List<HashMap<String, Object>> listDOsAndTable = new ArrayList<HashMap<String,Object>>();
-		List<HashMap<String, Object>> listDOsStatuses = null;
+		//List<HashMap<String, Object>> listDOsStatuses = null;
 		int events = 0;
 		int statuses = 0;
 		try {
@@ -238,11 +317,39 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 			}
 						
 			logger.info( String.format("***Received %d IOs statuses from SQL*** ", statuses));
-			
-		} catch (SQLException e) {
+
+		} 
+		catch (SQLException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
-			logger.error( String.format("Error while get IOs SQL: %s ", e));
+			logger.error( String.format("Error while get Events from SQL: %s ", e));
+			genErrorMessage(e.toString());
+			return 0;
+		}
+		catch (NullPointerException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			logger.error( String.format("Error while get Events from SQL: %s ", e));
+			genErrorMessage(e.toString());
+			return 0;
+		}
+		catch (Error e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			logger.error( String.format("Error while get Events from SQL: %s ", e));
+			genErrorMessage(e.toString());
+			return 0;
+		}
+		catch (Throwable e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			logger.error( String.format("Error while get Events from SQL: %s ", e));
+			genErrorMessage(e.getMessage() + " " + e.toString());
+			return 0;
+		}
+		finally
+		{
+			//return 0;
 		}
 		
 		logger.info( String.format("***Sended to Exchange messages: %d ***", events));
@@ -449,8 +556,8 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 			logger.error( String.format("Error while SQL execution: %s ", e));
 			
 			if (con != null) con.close();
-			
-			return null;
+			throw e;
+			//return null;
 
 		} finally {
             if (con != null) con.close();
