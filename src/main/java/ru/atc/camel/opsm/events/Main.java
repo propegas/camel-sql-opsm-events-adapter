@@ -122,6 +122,10 @@ public class Main {
 				//configuration.stra
 				
 				configuration.setEternal(true);
+				configuration.setDiskStorePath("/tmp/OPSM");
+				configuration.setCacheName("OPSM");
+				//configuration.set
+				//configuration.set
 				//configuration.setEternal(true);
 				//configuration.setLogging(true);
 				//configuration.setMaxEntriesLocalHeap(2500);
@@ -130,8 +134,8 @@ public class Main {
 				//PersistenceConfiguration persistenceConfiguration = new PersistenceConfiguration();
 				//persistenceConfiguration.strategy(asd);
 				//configuration.addPersistence(persistenceConfiguration);
-				configuration.setTimeToIdleSeconds(172800);
-				configuration.setTimeToLiveSeconds(172800);
+				configuration.setTimeToIdleSeconds(0);
+				configuration.setTimeToLiveSeconds(0);
 				configuration.setDiskPersistent(true);
 				configuration.setDiskExpiryThreadIntervalSeconds(900);
 	
@@ -169,7 +173,7 @@ public class Main {
 		        cachefile.createNewFile();
 		        
 		        
-		        from("cache:Test")
+		        from("cache:OPSM")
 				          
 		        .log(LoggingLevel.DEBUG, "*** Value added to the cache ****")
 		        //.log("*** Header1 ${header.EventUniqId}" )
@@ -203,7 +207,7 @@ public class Main {
 						in.setHeader(CacheConstants.CACHE_KEY, key+"_ERROR");
 					}
 				})
-				.to("cache:Test")
+				.to("cache:OPSM")
 				.process(new Processor() {
 					public void process(Exchange exchange) throws Exception {
 						Message in = exchange.getIn();
@@ -212,7 +216,7 @@ public class Main {
 						in.setHeader(CacheConstants.CACHE_KEY, key+"_NA");
 					}
 				})
-				.to("cache:Test")
+				.to("cache:OPSM")
 				.process(new Processor() {
 					public void process(Exchange exchange) throws Exception {
 						Message in = exchange.getIn();
@@ -221,7 +225,7 @@ public class Main {
 						in.setHeader(CacheConstants.CACHE_KEY, key+"_OK");
 					}
 				})
-				.to("cache:Test")
+				.to("cache:OPSM")
 				.end();
 		        
 				//LoggingLevel error = null;
@@ -242,7 +246,7 @@ public class Main {
 			             )
 			*/	
 					
-					.to("cache:Test")
+					.to("cache:OPSM")
 					.choice()
 						.when(header(CacheConstants.CACHE_ELEMENT_WAS_FOUND).isNull())
 						//.filter()
@@ -267,7 +271,7 @@ public class Main {
 							}
 						})
 							.to("direct:ShowData")
-							.to("cache:Test") 
+							.to("cache:OPSM") 
 							.marshal(myJson)
 							.to("activemq:OPSM-tgk1-Events.queue")
 							.log("New event1: ${id} ${header.EventUniqId}")
