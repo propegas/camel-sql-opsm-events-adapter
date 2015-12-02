@@ -193,7 +193,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 	private int processSearchEvents()  throws Exception, Error, SQLException {
 		
 		//Long timestamp;
-		DataSource dataSource = setupDataSource();
+		BasicDataSource dataSource = setupDataSource();
 		
 		List<HashMap<String, Object>> listDIsAndTable = new ArrayList<HashMap<String,Object>>();
 		List<HashMap<String, Object>> listIOsStatuses = new ArrayList<HashMap<String,Object>>();
@@ -324,6 +324,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 			e.printStackTrace();
 			logger.error( String.format("Error while get Events from SQL: %s ", e));
 			genErrorMessage(e.toString());
+			dataSource.close();
 			return 0;
 		}
 		catch (NullPointerException e) {
@@ -331,6 +332,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 			e.printStackTrace();
 			logger.error( String.format("Error while get Events from SQL: %s ", e));
 			genErrorMessage(e.toString());
+			dataSource.close();
 			return 0;
 		}
 		catch (Error e) {
@@ -338,6 +340,7 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 			e.printStackTrace();
 			logger.error( String.format("Error while get Events from SQL: %s ", e));
 			genErrorMessage(e.toString());
+			dataSource.close();
 			return 0;
 		}
 		catch (Throwable e) {
@@ -345,14 +348,18 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 			e.printStackTrace();
 			logger.error( String.format("Error while get Events from SQL: %s ", e));
 			genErrorMessage(e.getMessage() + " " + e.toString());
+			dataSource.close();
 			return 0;
 		}
 		finally
 		{
 			//return 0;
+			dataSource.close();
 		}
 		
 		logger.info( String.format("***Sended to Exchange messages: %d ***", events));
+		
+		dataSource.close();
 		
 		//removeLineFromFile("sendedEvents.dat", "Tgc1-1Cp1_ping_OK");
 	
@@ -607,11 +614,11 @@ public class OPSMConsumer extends ScheduledPollConsumer {
 		}
 	}
 
-	private DataSource setupDataSource() {
+	private BasicDataSource setupDataSource() {
 		
 		String url = String.format("jdbc:mysql://%s:%s/%s",
-		endpoint.getConfiguration().getMysql_host(), endpoint.getConfiguration().getMysql_port(),
-		endpoint.getConfiguration().getMysql_db());
+				endpoint.getConfiguration().getMysql_host(), endpoint.getConfiguration().getMysql_port(),
+				endpoint.getConfiguration().getMysql_db());
 		
         BasicDataSource ds = new BasicDataSource();
         ds.setDriverClassName("com.mysql.jdbc.Driver");
