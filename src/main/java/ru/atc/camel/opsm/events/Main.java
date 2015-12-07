@@ -243,7 +243,7 @@ public class Main {
 			             )
 			*/	
 				.choice()
-				.when(header("Type").isEqualTo("Heartbeat"))
+				.when(header("Type").isEqualTo("Error"))
 					.marshal(myJson)
 					.to("activemq:{{eventsqueue}}")
 					.log("Error: ${id} ${header.EventUniqId}")
@@ -333,7 +333,7 @@ public class Main {
 				})
 				//.bean(WsdlNNMConsumer.class, "genHeartbeatMessage", exchange)
 		        .marshal(myJson)
-		        .to("activemq:{{eventsqueue}}")
+		        .to("activemq:{{heartbeatsqueue}}")
 				.log("*** Heartbeat: ${id}");
 								
 				from("direct:ShowData").process(new Processor() {
