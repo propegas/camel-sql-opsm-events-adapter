@@ -122,7 +122,7 @@ public class Main {
 				//configuration.stra
 				
 				configuration.setEternal(true);
-				configuration.setDiskStorePath("/tmp/OPSM");
+				configuration.setDiskStorePath("/tmp/zsm/OPSM/");
 				configuration.setCacheName("OPSM");
 				//configuration.set
 				//configuration.set
